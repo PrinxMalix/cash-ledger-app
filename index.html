@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Smart Cash Ledger</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-rose-500 selection:text-white">
+
+  <!-- TOP APP BAR -->
+  <header class="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-500 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20 text-xl font-bold">
+          ₨
+        </div>
+        <div>
+          <h1 class="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
+            Smart Cash Ledger
+            <span class="inline-flex items-center gap-1 text-[10px] bg-emerald-500/10 text-emerald-400 font-semibold px-2 py-0.5 rounded-full border border-emerald-500/20">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Live Cloud Sync
+            </span>
+          </h1>
+          <p class="text-xs text-slate-400 hidden sm:block">Realtime income, CG-Trader USD conversions & daily expenses</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Quick Add Button -->
+        <button onclick="openModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs sm:text-sm px-3.5 py-2 rounded-xl transition shadow-lg shadow-emerald-900/30 flex items-center gap-1.5 active:scale-95">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+          </svg>
+          <span>Add Entry</span>
+        </button>
+
+        <button onclick="exportToCSV()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-xl border border-slate-700 transition active:scale-95" title="Export to CSV">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+    <!-- KPI STATS CARDS (Matching Excel Top Row) -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      
+      <!-- Live USD / PKR Rate -->
+      <div class="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl relative overflow-hidden shadow-sm">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Live USD / PKR</span>
+          <button onclick="promptEditRate()" class="text-xs text-rose-400 hover:text-rose-300" title="Edit Rate">✏️</button>
+        </div>
+        <div class="flex items-baseline gap-1.5">
+          <span class="text-xs text-slate-400 font-medium">₨</span>
+          <span id="kpi-usd-rate" class="text-xl sm:text-2xl font-extrabold text-white">278.50</span>
+        </div>
+        <p class="text-[10px] text-slate-500 mt-1">Live Market Exchange Rate</p>
+      </div>
+
+      <!-- Total Income -->
+      <div class="bg-slate-900/90 border border-emerald-900/30 p-4 rounded-2xl relative overflow-hidden shadow-sm">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">Total Income</span>
+          <span class="w-6 h-6 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-xs font-bold">↓</span>
+        </div>
+        <div class="flex items-baseline gap-1.5">
+          <span class="text-xs text-emerald-500 font-medium">PKR</span>
+          <span id="kpi-total-income" class="text-xl sm:text-2xl font-extrabold text-emerald-400">0.00</span>
+        </div>
+        <p class="text-[10px] text-slate-500 mt-1">Cash In + Net Converted USD</p>
+      </div>
+
+      <!-- Total Expenses -->
+      <div class="bg-slate-900/90 border border-rose-900/30 p-4 rounded-2xl relative overflow-hidden shadow-sm">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-[11px] font-semibold text-rose-400 uppercase tracking-wider">Total Expenses</span>
+          <span class="w-6 h-6 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center text-xs font-bold">↑</span>
+        </div>
+        <div class="flex items-baseline gap-1.5">
+          <span class="text-xs text-rose-500 font-medium">PKR</span>
+          <span id="kpi-total-expenses" class="text-xl sm:text-2xl font-extrabold text-rose-400">0.00</span>
+        </div>
+        <p class="text-[10px] text-slate-500 mt-1">Total Cash Out</p>
+      </div>
+
+      <!-- Remaining Net Cash -->
+      <div class="bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/40 border border-emerald-500/30 p-4 rounded-2xl relative overflow-hidden shadow-md">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-[11px] font-bold text-emerald-300 uppercase tracking-wider">Remaining Balance</span>
+          <span class="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center text-xs">💰</span>
+        </div>
+        <div class="flex items-baseline gap-1.5">
+          <span class="text-xs text-emerald-400 font-medium">PKR</span>
+          <span id="kpi-remaining-balance" class="text-xl sm:text-2xl font-black text-emerald-300">0.00</span>
+        </div>
+        <p class="text-[10px] text-emerald-500/80 font-medium mt-1">Net Available Cash</p>
+      </div>
+
+    </div>
+
+    <!-- TRANSACTIONS TABLE SECTION -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 class="text-sm sm:text-base font-bold text-white">Transaction History</h2>
+          <p class="text-xs text-slate-400">Realtime permanent ledger logs recorded in MongoDB</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="text" id="search-input" onkeyup="filterLedger()" placeholder="Search description or date..." class="bg-slate-800 border border-slate-700 text-xs rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-emerald-500 w-full sm:w-60">
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="bg-slate-950/70 border-b border-slate-800 text-slate-400 uppercase tracking-wider font-semibold">
+              <th class="py-3 px-4">Date</th>
+              <th class="py-3 px-4">Description</th>
+              <th class="py-3 px-4 text-right">Amount ($)</th>
+              <th class="py-3 px-4 text-right">Cash In (PKR)</th>
+              <th class="py-3 px-4 text-right text-emerald-400 font-bold">Net Credit (PKR)</th>
+              <th class="py-3 px-4 text-right text-rose-400 font-bold">Expenses (-)</th>
+              <th class="py-3 px-4 text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody id="ledger-table-body" class="divide-y divide-slate-800/60 font-medium">
+            <!-- Rows injected via JavaScript -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Empty State -->
+      <div id="empty-state" class="p-10 text-center text-slate-500 hidden">
+        <div class="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto mb-2 text-xl">📄</div>
+        <p class="text-sm font-semibold text-slate-400">No transactions recorded yet.</p>
+        <p class="text-xs text-slate-500 mt-0.5">Click "Add Entry" to record income, CG-Trader payout or expense.</p>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ADD TRANSACTION MODAL -->
+  <div id="entry-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-base font-bold text-white">Add Cash Ledger Entry</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-white text-lg">✕</button>
+      </div>
+
+      <!-- Type Tabs -->
+      <div class="grid grid-cols-3 gap-2 p-1 bg-slate-950 rounded-xl border border-slate-800 text-xs font-semibold">
+        <button type="button" id="tab-pkr" onclick="setEntryType('income_pkr')" class="py-2 rounded-lg bg-emerald-600 text-white transition">Cash In (PKR)</button>
+        <button type="button" id="tab-usd" onclick="setEntryType('income_usd')" class="py-2 rounded-lg text-slate-400 hover:text-white transition">USD Inflow ($)</button>
+        <button type="button" id="tab-exp" onclick="setEntryType('expense')" class="py-2 rounded-lg text-slate-400 hover:text-white transition">Expense (-)</button>
+      </div>
+
+      <form id="tx-form" onsubmit="submitTransaction(event)" class="space-y-3.5 text-left text-xs">
+        <div>
+          <label class="block text-slate-400 font-medium mb-1">Date</label>
+          <input type="date" id="tx-date" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+        </div>
+
+        <div>
+          <label class="block text-slate-400 font-medium mb-1">Description</label>
+          <input type="text" id="tx-desc" placeholder="e.g. CG-TRADER, Mama Ko Diye, Personal Expenses" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+        </div>
+
+        <!-- PKR Direct Input -->
+        <div id="field-cash-in">
+          <label class="block text-slate-400 font-medium mb-1">Cash In Amount (PKR)</label>
+          <input type="number" step="any" id="tx-pkr" placeholder="e.g. 26426" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+        </div>
+
+        <!-- USD Inflow Inputs -->
+        <div id="field-usd" class="hidden space-y-3 bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-400 font-medium mb-1">USD Amount ($)</label>
+              <input type="number" step="any" id="tx-usd-val" placeholder="e.g. 11.91" oninput="calculateUsdNetPreview()" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+            </div>
+            <div>
+              <label class="block text-slate-400 font-medium mb-1">Bank Fee / Deduction (PKR)</label>
+              <input type="number" step="any" id="tx-deduction" placeholder="e.g. 1163" oninput="calculateUsdNetPreview()" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+            </div>
+          </div>
+          <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex justify-between items-center text-[11px]">
+            <span class="text-slate-400">Net Converted (PKR):</span>
+            <span id="tx-usd-preview" class="font-bold text-emerald-400">₨ 0.00</span>
+          </div>
+        </div>
+
+        <!-- Expense Input -->
+        <div id="field-expense" class="hidden">
+          <label class="block text-slate-400 font-medium mb-1">Expense Amount (PKR)</label>
+          <input type="number" step="any" id="tx-expense" placeholder="e.g. 10000" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-rose-500">
+        </div>
+
+        <div class="pt-2 flex gap-2">
+          <button type="button" onclick="closeModal()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300 font-semibold transition">Cancel</button>
+          <button type="submit" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl transition shadow-lg shadow-emerald-950 active:scale-95">Save to Ledger</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const socket = io();
+    let currentUsdRate = 278.50;
+    let transactionsList = [];
+    let currentEntryType = 'income_pkr';
+
+    document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
+
+    // --- SOCKET EVENTS ---
+    socket.on('init_data', (data) => {
+      currentUsdRate = data.rate || 278.50;
+      transactionsList = data.transactions || [];
+      updateUI();
+    });
+
+    socket.on('rate_updated', (newRate) => {
+      currentUsdRate = newRate;
+      document.getElementById('kpi-usd-rate').innerText = currentUsdRate.toFixed(2);
+    });
+
+    socket.on('transaction_added', (tx) => {
+      transactionsList.push(tx);
+      updateUI();
+    });
+
+    socket.on('transaction_deleted', (id) => {
+      transactionsList = transactionsList.filter(t => t._id !== id);
+      updateUI();
+    });
+
+    // --- UI ENGINE ---
+    function updateUI() {
+      document.getElementById('kpi-usd-rate').innerText = currentUsdRate.toFixed(2);
+
+      let totalIncome = 0;
+      let totalExpenses = 0;
+
+      const tbody = document.getElementById('ledger-table-body');
+      tbody.innerHTML = '';
+
+      if (transactionsList.length === 0) {
+        document.getElementById('empty-state').classList.remove('hidden');
+      } else {
+        document.getElementById('empty-state').classList.add('hidden');
+      }
+
+      transactionsList.forEach(tx => {
+        const netCredit = tx.netCreditPkr || 0;
+        const exp = tx.expensePkr || 0;
+        totalIncome += netCredit;
+        totalExpenses += exp;
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/40 transition border-b border-slate-800/50';
+
+        tr.innerHTML = `
+          <td class="py-3 px-4 text-slate-300 whitespace-nowrap">${tx.date}</td>
+          <td class="py-3 px-4 font-semibold text-slate-100">${escapeHtml(tx.description)}</td>
+          <td class="py-3 px-4 text-right font-mono ${tx.usdAmount > 0 ? 'text-amber-400 font-bold' : 'text-slate-600'}">${tx.usdAmount > 0 ? '$' + tx.usdAmount.toFixed(2) : '-'}</td>
+          <td class="py-3 px-4 text-right font-mono ${tx.cashInPkr > 0 ? 'text-slate-200' : 'text-slate-600'}">${tx.cashInPkr > 0 ? formatPkr(tx.cashInPkr) : '-'}</td>
+          <td class="py-3 px-4 text-right font-mono ${netCredit > 0 ? 'text-emerald-400 font-bold' : 'text-slate-600'}">${netCredit > 0 ? formatPkr(netCredit) : '-'}</td>
+          <td class="py-3 px-4 text-right font-mono ${exp > 0 ? 'text-rose-400 font-bold' : 'text-slate-600'}">${exp > 0 ? formatPkr(exp) : '-'}</td>
+          <td class="py-3 px-4 text-center">
+            <button onclick="deleteTx('${tx._id}')" class="p-1 text-slate-500 hover:text-rose-400 transition" title="Delete">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      const remaining = totalIncome - totalExpenses;
+      document.getElementById('kpi-total-income').innerText = formatPkr(totalIncome);
+      document.getElementById('kpi-total-expenses').innerText = formatPkr(totalExpenses);
+      document.getElementById('kpi-remaining-balance').innerText = formatPkr(remaining);
+    }
+
+    function formatPkr(num) {
+      return Number(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function escapeHtml(str) {
+      return str ? str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
+    }
+
+    // --- MODAL & TABS ---
+    function openModal() {
+      document.getElementById('entry-modal').classList.remove('hidden');
+      setEntryType('income_pkr');
+    }
+
+    function closeModal() {
+      document.getElementById('entry-modal').classList.add('hidden');
+      document.getElementById('tx-form').reset();
+      document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('tx-usd-preview').innerText = '₨ 0.00';
+    }
+
+    function setEntryType(type) {
+      currentEntryType = type;
+      const btnPkr = document.getElementById('tab-pkr');
+      const btnUsd = document.getElementById('tab-usd');
+      const btnExp = document.getElementById('tab-exp');
+
+      const fPkr = document.getElementById('field-cash-in');
+      const fUsd = document.getElementById('field-usd');
+      const fExp = document.getElementById('field-expense');
+
+      btnPkr.className = (type === 'income_pkr') ? 'py-2 rounded-lg bg-emerald-600 text-white font-semibold transition' : 'py-2 rounded-lg text-slate-400 hover:text-white transition';
+      btnUsd.className = (type === 'income_usd') ? 'py-2 rounded-lg bg-emerald-600 text-white font-semibold transition' : 'py-2 rounded-lg text-slate-400 hover:text-white transition';
+      btnExp.className = (type === 'expense') ? 'py-2 rounded-lg bg-rose-600 text-white font-semibold transition' : 'py-2 rounded-lg text-slate-400 hover:text-white transition';
+
+      fPkr.classList.toggle('hidden', type !== 'income_pkr');
+      fUsd.classList.toggle('hidden', type !== 'income_usd');
+      fExp.classList.toggle('hidden', type !== 'expense');
+    }
+
+    function calculateUsdNetPreview() {
+      const usd = parseFloat(document.getElementById('tx-usd-val').value) || 0;
+      const deduction = parseFloat(document.getElementById('tx-deduction').value) || 0;
+      let net = (usd * currentUsdRate) - deduction;
+      if (net < 0) net = 0;
+      document.getElementById('tx-usd-preview').innerText = '₨ ' + formatPkr(net);
+    }
+
+    function submitTransaction(e) {
+      e.preventDefault();
+      const date = document.getElementById('tx-date').value;
+      const description = document.getElementById('tx-desc').value.trim();
+
+      const payload = {
+        date,
+        description,
+        type: currentEntryType,
+        usdRateUsed: currentUsdRate
+      };
+
+      if (currentEntryType === 'income_pkr') {
+        payload.cashInPkr = parseFloat(document.getElementById('tx-pkr').value) || 0;
+      } else if (currentEntryType === 'income_usd') {
+        payload.usdAmount = parseFloat(document.getElementById('tx-usd-val').value) || 0;
+        payload.deductionPkr = parseFloat(document.getElementById('tx-deduction').value) || 0;
+      } else if (currentEntryType === 'expense') {
+        payload.expensePkr = parseFloat(document.getElementById('tx-expense').value) || 0;
+      }
+
+      socket.emit('add_transaction', payload);
+      closeModal();
+    }
+
+    function deleteTx(id) {
+      if (confirm('Delete this ledger transaction?')) {
+        socket.emit('delete_transaction', id);
+      }
+    }
+
+    function promptEditRate() {
+      const n = prompt('Enter new USD to PKR exchange rate:', currentUsdRate);
+      if (n && !isNaN(n)) {
+        socket.emit('update_rate', parseFloat(n));
+      }
+    }
+
+    function filterLedger() {
+      const term = document.getElementById('search-input').value.toLowerCase();
+      const rows = document.querySelectorAll('#ledger-table-body tr');
+      rows.forEach(r => {
+        const text = r.innerText.toLowerCase();
+        r.style.display = text.includes(term) ? '' : 'none';
+      });
+    }
+
+    function exportToCSV() {
+      let csv = 'Date,Description,Amount ($),Cash In (PKR),Net Credit (PKR),Expenses (-)\n';
+      transactionsList.forEach(t => {
+        csv += `"${t.date}","${t.description.replace(/"/g, '""')}",${t.usdAmount || ''},${t.cashInPkr || ''},${t.netCreditPkr || ''},${t.expensePkr || ''}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `Cash_Ledger_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+    }
+  </script>
+</body>
+</html>

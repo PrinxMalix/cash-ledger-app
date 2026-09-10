@@ -1,0 +1,15 @@
+{
+  "name": "cash-ledger-realtime",
+  "version": "1.0.0",
+  "description": "Realtime Online Cash Ledger with Live USD Rate and MongoDB Persistence",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "mongoose": "^8.3.4",
+    "socket.io": "^4.7.5",
+    "cors": "^2.8.5"
+  }
+}
